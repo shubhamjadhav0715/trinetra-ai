@@ -1,8 +1,11 @@
 const futuresConfig = Object.freeze({
   marketType: 'perpetual_futures',
   tradingMode: 'paper',
-  initialCapital: 10000,
-  currency: 'INR',
+  initialCapital: 1000,
+  currency: 'USDT',
+  // Delta BTCUSD/ETHUSD settle in USD. Paper accounting treats USD and USDT
+  // at a 1:1 simulation peg; this is an approximation, not a live conversion.
+  usdToUsdtRate: 1,
   allowLiveOrders: false,
   defaultSymbols: ['BTCUSD', 'ETHUSD'],
   defaultTimeframe: '5m',
