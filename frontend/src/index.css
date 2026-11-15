@@ -1,28 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#root {
-  min-height: 100%;
-}
-
-body {
-  margin: 0;
-  font-family: 'Space Grotesk', sans-serif;
-  background:
-    radial-gradient(900px 400px at 20% -10%, rgba(20, 184, 166, 0.16), transparent 60%),
-    radial-gradient(700px 300px at 90% 0%, rgba(59, 130, 246, 0.12), transparent 55%),
-    #070b14;
-  color: #d6deef;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.mono {
-  font-family: 'IBM Plex Mono', monospace;
-}
+:root{font-family:'Space Grotesk',sans-serif;color:#e7edf7;background:#080e18;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-optical-sizing:auto}
+html,body,#root{min-height:100%;margin:0}
+body{min-width:320px;background:radial-gradient(ellipse 70% 38% at 52% -12%,rgba(23,111,119,.19),transparent 70%),radial-gradient(ellipse 40% 30% at 100% 0%,rgba(67,76,143,.12),transparent 72%),#080e18;color:#e7edf7}
+button,input{font:inherit}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #48d9c7;outline-offset:3px}
+::selection{background:rgba(53,214,193,.25);color:#fff}
+.mono{font-family:'IBM Plex Mono',monospace}
