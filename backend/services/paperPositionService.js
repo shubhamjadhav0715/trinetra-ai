@@ -189,12 +189,22 @@ const closePaperPosition = async (positionId, reason = 'MANUAL', exitPriceOverri
 };
 
 
-const monitorOpenPositions = async () => {
+const monitorOpenPositions = async ({ getPrice } = {}) => {
   const positions = await getOpenPositions();
   const results = [];
   for (const position of positions) {
-    const ticker = await getTicker(position.symbol);
-    const markPrice = assertPositive(ticker.markPrice ?? ticker.price, 'current mark price');
+    let markPrice;
+    if (typeof getPrice === 'function') {
+      markPrice = getPrice(position.symbol);
+      if (markPrice === null || markPrice === undefined) {
+        results.push({ positionId: String(position._id), action: 'SKIP_STALE_PRICE' });
+        continue;
+      }
+    } else {
+      const ticker = await getTicker(position.symbol);
+      markPrice = ticker.markPrice ?? ticker.price;
+    }
+    markPrice = assertPositive(markPrice, 'current mark price');
     const hitStop = position.stopLoss !== null && (
       (position.side === 'LONG' && markPrice <= position.stopLoss)
       || (position.side === 'SHORT' && markPrice >= position.stopLoss)
