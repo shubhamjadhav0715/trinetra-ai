@@ -16,15 +16,13 @@ const paperWalletSchema = new mongoose.Schema({
   },
   currency: {
     type: String,
-    enum: ['INR'],
-    default: 'INR',
-    immutable: true,
+    enum: ['USDT'],
+    default: 'USDT',
   },
   initialCapital: {
     type: Number,
     required: true,
     min: 0,
-    immutable: true,
   },
   availableBalance: {
     type: Number,
