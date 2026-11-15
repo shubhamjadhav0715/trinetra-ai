@@ -66,11 +66,11 @@ const openPaperPosition = async (input) => {
   const ticker = await getTicker(symbol);
   const entryPrice = assertPositive(ticker.markPrice ?? ticker.price, 'current mark price');
   const stopLoss = assertPositive(input.stopLoss, 'stopLoss');
-  const takeProfit = input.takeProfit == null ? null : assertPositive(input.takeProfit, 'takeProfit');
-  if (side === 'LONG' && ((stopLoss !== null && stopLoss >= entryPrice) || (takeProfit !== null && takeProfit <= entryPrice))) {
+  const takeProfit = assertPositive(input.takeProfit, 'takeProfit');
+  if (side === 'LONG' && (stopLoss >= entryPrice || takeProfit <= entryPrice)) {
     throw new Error('For LONG, stopLoss must be below entry and takeProfit must be above entry.');
   }
-  if (side === 'SHORT' && ((stopLoss !== null && stopLoss <= entryPrice) || (takeProfit !== null && takeProfit >= entryPrice))) {
+  if (side === 'SHORT' && (stopLoss <= entryPrice || takeProfit >= entryPrice)) {
     throw new Error('For SHORT, stopLoss must be above entry and takeProfit must be below entry.');
   }
 
