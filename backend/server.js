@@ -11,6 +11,7 @@ const marketHistoryRoutes = require('./routes/marketHistoryRoutes');
 const executionRoutes = require('./routes/executionRoutes');
 const backtestRoutes = require('./routes/backtestRoutes');
 const cryptoRoutes = require('./routes/cryptoRoutes');
+const paperTradingRoutes = require('./routes/paperTradingRoutes');
 const connectDB = require('./config/db');
 
 dotenv.config();
@@ -43,6 +44,7 @@ app.use('/api/market/history', marketHistoryRoutes);
 app.use('/api/execution', executionRoutes);
 app.use('/api/backtest', backtestRoutes);
 app.use('/api/crypto', cryptoRoutes);
+app.use('/api/paper-trading', paperTradingRoutes);
 
 const startServer = async () => {
   await connectDB();
