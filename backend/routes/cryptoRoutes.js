@@ -10,7 +10,13 @@ const {
   getMarkPriceHistory,
 } = require('../services/deltaExchangeService');
 
-const { generateFuturesSignal } = require('../strategy/futuresStrategyEngine');
+const { generateFuturesSignal, filterClosedCandles } = require('../strategy/futuresStrategyEngine');
+const {
+  detectFairValueGaps,
+  analyzeFundingRate,
+  analyzeOpenInterest,
+  calculateOrderBookImbalance,
+} = require('../strategy/futuresMarketContext');
 
 const router = express.Router();
 
@@ -49,6 +55,72 @@ router.get('/:symbol/candles', asyncHandler(async (req, res) => {
     end: req.query.end,
   });
   res.json(result);
+}));
+
+router.get('/:symbol/context', asyncHandler(async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+  const resolution = req.query.resolution || '5m';
+  const results = await Promise.allSettled([
+    getCandles({ symbol, resolution }),
+    getTicker(symbol),
+    getOrderBook(symbol, 20),
+    getFundingHistory({ symbol, resolution: '1h' }),
+    getOpenInterestHistory({ symbol, resolution }),
+  ]);
+
+  const [marketResult, tickerResult, bookResult, fundingResult, oiResult] = results;
+  const closedCandles = marketResult.status === 'fulfilled'
+    ? filterClosedCandles(marketResult.value.candles, resolution)
+    : [];
+  const recentCandles = closedCandles.slice(-2);
+  const previousClose = recentCandles.length === 2 ? Number(recentCandles[0].close) : null;
+  const currentClose = recentCandles.length === 2 ? Number(recentCandles[1].close) : null;
+  const priceChangePercent = previousClose > 0
+    ? ((currentClose - previousClose) / previousClose) * 100
+    : null;
+
+  const fundingCandles = fundingResult.status === 'fulfilled' ? fundingResult.value.candles : [];
+  const oiCandles = oiResult.status === 'fulfilled' ? oiResult.value.candles : [];
+  const fundingRate = fundingCandles.length ? fundingCandles[fundingCandles.length - 1].close : null;
+  const previousOI = oiCandles.length > 1 ? oiCandles[oiCandles.length - 2].close : null;
+  const currentOI = oiCandles.length ? oiCandles[oiCandles.length - 1].close : null;
+  const ticker = tickerResult.status === 'fulfilled' ? tickerResult.value : null;
+  const orderBook = bookResult.status === 'fulfilled' ? bookResult.value : null;
+
+  res.json({
+    provider: 'Delta Exchange India',
+    symbol,
+    marketType: 'perpetual_futures',
+    tradingMode: 'paper',
+    resolution,
+    lastClosedCandleAt: closedCandles.length
+      ? new Date(closedCandles[closedCandles.length - 1].timestamp * 1000).toISOString()
+      : null,
+    ticker: ticker || { unavailable: true, error: tickerResult.reason?.message },
+    fairValueGaps: detectFairValueGaps(closedCandles).slice(-10),
+    funding: {
+      analysis: analyzeFundingRate(fundingRate),
+      availableCandles: fundingCandles.length,
+      error: fundingResult.status === 'rejected' ? fundingResult.reason?.message : null,
+    },
+    openInterest: {
+      analysis: analyzeOpenInterest({
+        previous: previousOI,
+        current: currentOI,
+        priceChangePercent,
+      }),
+      priceChangePercent,
+      availableCandles: oiCandles.length,
+      error: oiResult.status === 'rejected' ? oiResult.reason?.message : null,
+    },
+    orderBook: orderBook
+      ? calculateOrderBookImbalance(orderBook)
+      : { bidSize: 0, askSize: 0, imbalance: null, bias: 'UNKNOWN', error: bookResult.reason?.message },
+    dataWarnings: results.flatMap((result, index) => result.status === 'rejected'
+      ? [['candles', 'ticker', 'orderBook', 'funding', 'openInterest'][index] + ': ' + result.reason.message]
+      : []),
+    note: 'Market context for research only. It does not change the strategy signal or place orders.',
+  });
 }));
 
 router.get('/:symbol/signal', asyncHandler(async (req, res) => {
