@@ -4,6 +4,7 @@ const {
   openPaperPosition,
   listPaperPositions,
   closePaperPosition,
+  monitorOpenPositions,
 } = require('../services/paperPositionService');
 
 const router = express.Router();
@@ -75,7 +76,7 @@ router.post('/positions', async (req, res) => {
       note: 'Paper position created locally. No live exchange order was placed.',
     });
   } catch (error) {
-    const clientError = /must be|Only configured|Maximum|For LONG|For SHORT|Insufficient|not found|incomplete|requires|Invalid|paper-only|whole number/i.test(error.message);
+    const clientError = /must be|Only configured|Maximum|risk|stopLoss|For LONG|For SHORT|Insufficient|not found|incomplete|requires|Invalid|paper-only|whole number/i.test(error.message);
     return res.status(clientError ? 400 : 500).json({
       success: false,
       message: 'Unable to open paper position.',
@@ -105,6 +106,27 @@ router.get('/positions', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Unable to load paper positions.',
+      error: error.message,
+    });
+  }
+});
+
+
+ // Check every open paper position against its latest Delta mark price.
+router.post('/positions/monitor', async (req, res) => {
+  try {
+    const results = await monitorOpenPositions();
+    return res.status(200).json({
+      success: true,
+      mode: 'paper',
+      checked: results.length,
+      results,
+      note: 'This check runs when called. Keep calling this endpoint from a trusted scheduler or dashboard for repeated monitoring. No live exchange orders are sent.',
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Unable to monitor paper positions.',
       error: error.message,
     });
   }
