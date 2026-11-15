@@ -8,6 +8,7 @@ const {
 } = require('../services/paperPositionService');
 
 const router = express.Router();
+const { getStreamStatus } = require('../services/deltaMarkPriceStream');
 
 const serializePosition = (position) => ({
   id: position._id,
@@ -112,7 +113,18 @@ router.get('/positions', async (req, res) => {
 });
 
 
- // Check every open paper position against its latest Delta mark price.
+ 
+router.get('/monitor/status', (req, res) => {
+  return res.status(200).json({
+    success: true,
+    mode: 'paper',
+    intervalMs: 1000,
+    stream: getStreamStatus(),
+    note: 'Local SL/TP checks run every second. Delta mark-price feed publishes approximately every 2 seconds; stale prices are ignored.',
+  });
+});
+
+// Check every open paper position against its latest Delta mark price.
 router.post('/positions/monitor', async (req, res) => {
   try {
     const results = await monitorOpenPositions();
