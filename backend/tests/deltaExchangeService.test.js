@@ -29,3 +29,12 @@ test('sorts candles and removes duplicate timestamps', () => {
 test('rejects a malformed API envelope', () => {
   assert.throws(() => normalizeCandles({ success: false, error: { message: 'bad' } }), /bad/);
 });
+
+test('accepts negative funding-rate metric candles', () => {
+  const { normalizeMetricCandles } = require('../services/deltaExchangeService');
+  const result = normalizeMetricCandles({ success: true, result: [
+    { time: 1700000000, open: -0.01, high: -0.005, low: -0.02, close: -0.015, volume: 0 },
+  ] });
+  assert.equal(result.length, 1);
+  assert.equal(result[0].close, -0.015);
+});
