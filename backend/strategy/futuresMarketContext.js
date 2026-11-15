@@ -32,6 +32,9 @@ const detectFairValueGaps = (candles = []) => {
 };
 
 const analyzeFundingRate = (fundingRate) => {
+  if (fundingRate === null || fundingRate === undefined || fundingRate === '') {
+    return { value: null, bias: 'UNKNOWN', note: 'Funding rate unavailable.' };
+  }
   const value = Number(fundingRate);
   if (!Number.isFinite(value)) return { value: null, bias: 'UNKNOWN', note: 'Funding rate unavailable.' };
   if (value > 0) return { value, bias: 'POSITIVE', note: 'Longs pay shorts; positive funding can indicate crowded long positioning.' };
