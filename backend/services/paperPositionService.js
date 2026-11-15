@@ -36,8 +36,8 @@ const openPaperPosition = async (input) => {
   if (leverage > futuresConfig.maxPaperLeverage) throw new Error(`Maximum paper leverage is ${futuresConfig.maxPaperLeverage}x.`);
 
   const product = await resolveProduct(symbol);
-  if (product.state !== 'live' || !product.contractValue || !product.tickSize) {
-    throw new Error('Delta product metadata is incomplete or the contract is not live.');
+  if (product.state !== 'live' || !product.contractValue || !product.tickSize || product.quotingAsset !== 'USD') {
+    throw new Error('Delta product metadata is incomplete, not live, or not USD-quoted.');
   }
   const ticker = await getTicker(symbol);
   const entryPrice = assertPositive(ticker.markPrice ?? ticker.price, 'current mark price');
