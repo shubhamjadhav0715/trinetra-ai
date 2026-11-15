@@ -1,67 +1,58 @@
-# Trinetra AI — Crypto Paper Trading Roadmap
+# Trinetra AI — Delta Exchange Crypto Paper Trading Roadmap
 
 ## Product goal
+Build a crypto-market analysis and paper-trading workspace using Delta Exchange India public market data. Initial release is research and simulation only; it must not place live orders or require exchange trading permissions.
 
-Build a crypto-market analysis and paper-trading workspace for BTC, ETH, and other configurable spot pairs. The first release is for research and simulation only. It must not place live orders or request exchange trading permissions.
-
-## Current repository baseline
-
+## Repository baseline
 - Frontend: React 19 + Vite, React Router, Lightweight Charts.
 - Backend: Node.js + Express, MongoDB/Mongoose.
-- Existing backend modules include market data, indicators/strategy analysis, backtesting, risk controls, and trade execution routes.
-- Existing market-data integration is FYERS-oriented. Crypto support should be added through a separate provider adapter; do not silently replace or break the existing integration.
+- Existing FYERS-oriented modules remain separate and must not be broken.
+- Delta Exchange India public market data uses https://api.india.delta.exchange and does not require API credentials.
 
-## Initial trading styles
-
-The UI should allow the user to select a timeframe appropriate to:
-- Scalping: 1m, 3m, 5m
-- Intraday: 15m, 30m, 1h
-- Swing: 4h, 1d, 1w
-
-These are analysis presets, not promises of profitability. Strategies must be evaluated independently on historical data before paper use.
+## Trading styles and timeframes
+- Scalping: 1m, 3m, 5m.
+- Intraday: 15m, 30m, 1h.
+- Swing: 1h candles initially; aggregate to 4h and 1d after validating candle boundaries and completeness.
+- Product symbols must be discovered from the live product catalogue; do not assume BTCUSD, BTC_INR, or any symbol is currently listed.
 
 ## Delivery phases
+### Phase 1 — Delta market-data foundation
+- Discover live products from GET /v2/products.
+- Read tickers from GET /v2/tickers and individual ticker details from GET /v2/tickers/{symbol}.
+- Read OHLC candles from GET /v2/history/candles using Unix timestamps in seconds.
+- Read depth from GET /v2/l2orderbook/{symbol}.
+- Normalize all data, validate OHLC values, sort candles, and reject malformed inputs.
+- Show provider and last-updated timestamp; surface errors rather than inventing prices.
 
-### Phase 1 — Crypto market-data foundation
-- Choose a public market-data provider after confirming the user's preferred exchange/data source.
-- Normalize symbols, OHLCV candles, timestamps, and timeframes into one internal format.
-- Add provider health checks, request validation, rate-limit handling, and clear stale-data/error states.
-- Never put API secrets in frontend code or commit real credentials.
-
-### Phase 2 — Indicator and strategy engine
-- Audit and test existing RSI, moving-average, MACD, and Bollinger calculations.
-- Add independently testable strategies for trend/momentum, range/mean-reversion, breakout, and Fair Value Gap setups.
-- Signals must include the strategy name, timeframe, reasoning, invalidation level, and required candle count.
-- Avoid look-ahead bias: a signal may use only fully closed candles unless a strategy explicitly documents otherwise.
+### Phase 2 — Strategy engine
+- Audit and test RSI, moving averages, MACD, and Bollinger calculations.
+- Add momentum/trend, mean-reversion, breakout, and Fair Value Gap strategies.
+- Signals include strategy, symbol, timeframe, reasoning, invalidation, and closed-candle timestamp.
+- Prevent look-ahead bias by using completed candles only.
 
 ### Phase 3 — Backtesting
-- Use historical OHLCV data with fees and configurable slippage.
-- Report net P&L, win rate, profit factor, maximum drawdown, number of trades, and average risk/reward.
-- Separate in-sample and out-of-sample periods; do not optimize on the test period.
+- Include realistic fees and configurable slippage.
+- Report net P&L, win rate, profit factor, max drawdown, trade count, and average risk/reward.
+- Keep in-sample and out-of-sample periods separate.
 
-### Phase 4 — Paper-trading simulator
+### Phase 4 — Paper trading
 - Simulate entries, exits, fees, slippage, stop-losses, targets, and open positions.
-- Persist every simulated order and trade with timestamps and strategy metadata.
-- Enforce risk limits and prevent duplicate orders.
-- Clearly label all balances and P&L as simulated.
+- Persist every simulated order/trade and enforce risk limits.
+- Label all balances and P&L as simulated.
+- Do not add live order placement in this phase.
 
 ### Phase 5 — Dashboard and journal
-- Add market watchlists, charts, strategy signals, open paper positions, trade history, and performance analytics.
+- Watchlist, charts, strategy signals, open paper positions, history, analytics, export, and alerts.
 - Display data source and last-updated time.
-- Add exportable trade journal and configurable alerts.
 
 ## Safety defaults
-
-- TRADING_MODE=paper is the only supported mode in the initial release.
-- No live order endpoint, exchange withdrawal permission, or live API credential is required.
-- Paper trading must be visibly distinguished from real trading.
-- Risk controls must reject invalid or oversized orders; a strategy signal is not a recommendation or guarantee.
+- TRADING_MODE=paper only.
+- No live order endpoint or trading API credentials are needed.
 - Never commit .env, access tokens, API secrets, or personal credentials.
+- A strategy signal is not a recommendation or guarantee of profitability.
 
 ## Phase 1 acceptance criteria
-
-- The selected public data provider can return normalized OHLCV candles for at least BTC and ETH.
-- Candle validation rejects missing, malformed, out-of-order, or non-positive OHLC values.
-- The API reports provider errors and stale data without inventing prices.
-- Automated tests cover normalization and validation.
-- Existing FYERS routes continue to work unchanged.
+- Live product catalogue and tickers are accessible.
+- Historical OHLC candles can be fetched for a listed product.
+- Candle validation rejects malformed or invalid OHLC data.
+- Existing FYERS endpoints continue working unchanged.
