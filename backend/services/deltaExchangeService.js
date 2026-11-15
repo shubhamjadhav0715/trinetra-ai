@@ -138,6 +138,25 @@ const getCandles = async ({ symbol, resolution = '5m', start, end }) => {
   };
 };
 
+const normalizeMetricCandles = (payload) => {
+  const rows = unwrapResult(payload, 'metric candles');
+  if (!Array.isArray(rows)) throw new Error('Delta Exchange metric candles payload is not an array.');
+  return rows.map((row) => {
+    const timestamp = toNumber(row?.time ?? row?.timestamp);
+    const open = toNumber(row?.open);
+    const high = toNumber(row?.high);
+    const low = toNumber(row?.low);
+    const close = toNumber(row?.close);
+    const volume = toNumber(row?.volume ?? 0);
+    if (timestamp === null || timestamp <= 0 ||
+        [open, high, low, close, volume].some((value) => value === null) ||
+        volume < 0 || high < Math.max(open, close, low) ||
+        low > Math.min(open, close, high)) return null;
+    return { timestamp, open, high, low, close, volume };
+  }).filter(Boolean).sort((a, b) => a.timestamp - b.timestamp)
+    .filter((candle, index, list) => index === 0 || candle.timestamp !== list[index - 1].timestamp);
+};
+
 const getMetricHistory = async ({ symbol, metric, resolution = '5m', start, end }) => {
   if (!['FUNDING', 'OI', 'MARK'].includes(metric)) throw new Error('Unsupported futures metric.');
   if (!VALID_RESOLUTIONS.has(resolution)) throw new Error('Unsupported resolution for futures metric.');
@@ -153,7 +172,7 @@ const getMetricHistory = async ({ symbol, metric, resolution = '5m', start, end 
   const response = await http.get('/v2/history/candles', {
     params: { resolution, symbol: `${metric}:${product.symbol}`, start: startSeconds, end: endSeconds },
   });
-  const candles = normalizeCandles(response.data);
+  const candles = normalizeMetricCandles(response.data);
   return {
     provider: 'Delta Exchange India',
     symbol: product.symbol,
@@ -179,4 +198,4 @@ const getOrderBook = async (symbol, depth = 20) => {
   return { symbol: product.symbol, ...unwrapResult(response.data, 'order book') };
 };
 
-module.exports = { VALID_RESOLUTIONS, normalizeCandle, normalizeCandles, getProducts, getTickers, getTicker, getCandles, getFundingHistory, getOpenInterestHistory, getMarkPriceHistory, getOrderBook };
+module.exports = { VALID_RESOLUTIONS, normalizeCandle, normalizeCandles, normalizeMetricCandles, getProducts, getTickers, getTicker, getCandles, getFundingHistory, getOpenInterestHistory, getMarkPriceHistory, getOrderBook };
