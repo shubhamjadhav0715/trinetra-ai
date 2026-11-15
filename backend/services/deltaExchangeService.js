@@ -162,6 +162,7 @@ const getMetricHistory = async ({ symbol, metric, resolution = '5m', start, end 
   if (!VALID_RESOLUTIONS.has(resolution)) throw new Error('Unsupported resolution for futures metric.');
   const product = await resolveProduct(symbol);
   const endSeconds = end === undefined ? Math.floor(Date.now() / 1000) : Number(end);
+  const secondsPerCandle = ({ '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600 })[resolution];
   const startSeconds = start === undefined ? endSeconds - secondsPerCandle * 500 : Number(start);
   if (!Number.isSafeInteger(startSeconds) || !Number.isSafeInteger(endSeconds) ||
       startSeconds <= 0 || startSeconds >= endSeconds ||
