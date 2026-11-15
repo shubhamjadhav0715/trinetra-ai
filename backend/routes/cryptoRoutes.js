@@ -5,6 +5,9 @@ const {
   getTicker,
   getCandles,
   getOrderBook,
+  getFundingHistory,
+  getOpenInterestHistory,
+  getMarkPriceHistory,
 } = require('../services/deltaExchangeService');
 
 const router = express.Router();
@@ -43,6 +46,28 @@ router.get('/:symbol/candles', asyncHandler(async (req, res) => {
     start: req.query.start,
     end: req.query.end,
   });
+  res.json(result);
+}));
+
+const metricParams = (req) => ({
+  symbol: req.params.symbol,
+  resolution: req.query.resolution || '5m',
+  start: req.query.start,
+  end: req.query.end,
+});
+
+router.get('/:symbol/funding', asyncHandler(async (req, res) => {
+  const result = await getFundingHistory(metricParams(req));
+  res.json(result);
+}));
+
+router.get('/:symbol/open-interest', asyncHandler(async (req, res) => {
+  const result = await getOpenInterestHistory(metricParams(req));
+  res.json(result);
+}));
+
+router.get('/:symbol/mark-price', asyncHandler(async (req, res) => {
+  const result = await getMarkPriceHistory(metricParams(req));
   res.json(result);
 }));
 
