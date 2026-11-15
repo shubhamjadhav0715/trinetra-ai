@@ -13,6 +13,7 @@ const backtestRoutes = require('./routes/backtestRoutes');
 const cryptoRoutes = require('./routes/cryptoRoutes');
 const paperTradingRoutes = require('./routes/paperTradingRoutes');
 const connectDB = require('./config/db');
+const { startPaperRiskMonitor } = require('./services/paperRiskMonitor');
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use('/api/paper-trading', paperTradingRoutes);
 
 const startServer = async () => {
   await connectDB();
+  startPaperRiskMonitor();
   app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 };
 
