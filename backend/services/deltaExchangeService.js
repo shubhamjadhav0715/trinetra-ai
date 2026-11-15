@@ -3,6 +3,7 @@ const axios = require('axios');
 const BASE_URL = process.env.DELTA_BASE_URL || 'https://api.india.delta.exchange';
 const TIMEOUT_MS = 12_000;
 const VALID_RESOLUTIONS = new Set(['1m', '3m', '5m', '15m', '30m', '1h']);
+const DEFAULT_CONTRACT_TYPES = 'perpetual_futures';
 const http = axios.create({ baseURL: BASE_URL, timeout: TIMEOUT_MS, headers: { Accept: 'application/json' } });
 
 const toNumber = (value) => {
@@ -40,9 +41,8 @@ const normalizeCandles = (payload) => {
     .filter((candle, index, list) => index === 0 || candle.timestamp !== list[index - 1].timestamp);
 };
 
-const getProducts = async ({ contractTypes, states = 'live' } = {}) => {
-  const params = { states };
-  if (contractTypes) params.contract_types = contractTypes;
+const getProducts = async ({ contractTypes = DEFAULT_CONTRACT_TYPES, states = 'live' } = {}) => {
+  const params = { states, contract_types: contractTypes };
   const response = await http.get('/v2/products', { params });
   const products = unwrapResult(response.data, 'products');
   if (!Array.isArray(products)) throw new Error('Delta Exchange products payload is not an array.');
@@ -56,6 +56,14 @@ const getProducts = async ({ contractTypes, states = 'live' } = {}) => {
     quotingAsset: product.quoting_asset?.symbol || product.quoting_asset || '',
     settlementAsset: product.settlement_asset?.symbol || product.settlement_asset || '',
     state: product.state || '',
+    tickSize: toNumber(product.tick_size),
+    lotSize: toNumber(product.contract_value ?? product.lot_size),
+    minSize: toNumber(product.min_size),
+    maxLeverage: toNumber(product.max_leverage),
+    makerCommissionRate: toNumber(product.maker_commission_rate),
+    takerCommissionRate: toNumber(product.taker_commission_rate),
+    initialMargin: toNumber(product.initial_margin),
+    maintenanceMargin: toNumber(product.maintenance_margin),
   })).filter((product) => product.symbol);
 };
 
@@ -68,9 +76,8 @@ const resolveProduct = async (symbol) => {
   return product;
 };
 
-const getTickers = async ({ contractTypes, underlyingAssetSymbols } = {}) => {
-  const params = {};
-  if (contractTypes) params.contract_types = contractTypes;
+const getTickers = async ({ contractTypes = DEFAULT_CONTRACT_TYPES, underlyingAssetSymbols } = {}) => {
+  const params = { contract_types: contractTypes };
   if (underlyingAssetSymbols) params.underlying_asset_symbols = underlyingAssetSymbols;
   const response = await http.get('/v2/tickers', { params });
   const rows = unwrapResult(response.data, 'tickers');
@@ -131,6 +138,37 @@ const getCandles = async ({ symbol, resolution = '5m', start, end }) => {
   };
 };
 
+const getMetricHistory = async ({ symbol, metric, resolution = '5m', start, end }) => {
+  if (!['FUNDING', 'OI', 'MARK'].includes(metric)) throw new Error('Unsupported futures metric.');
+  if (!VALID_RESOLUTIONS.has(resolution)) throw new Error('Unsupported resolution for futures metric.');
+  const product = await resolveProduct(symbol);
+  const endSeconds = end === undefined ? Math.floor(Date.now() / 1000) : Number(end);
+  const secondsPerCandle = ({ '1m': 60, '3m': 180, '5m': 300, '15m': 900, '30m': 1800, '1h': 3600 })[resolution];
+  const startSeconds = start === undefined ? endSeconds - secondsPerCandle * 500 : Number(start);
+  if (!Number.isSafeInteger(startSeconds) || !Number.isSafeInteger(endSeconds) ||
+      startSeconds <= 0 || startSeconds >= endSeconds ||
+      endSeconds - startSeconds > 2000 * secondsPerCandle) {
+    throw new Error('Invalid metric time range. Use Unix seconds and request no more than 2000 candles.');
+  }
+  const response = await http.get('/v2/history/candles', {
+    params: { resolution, symbol: `${metric}:${product.symbol}`, start: startSeconds, end: endSeconds },
+  });
+  const candles = normalizeCandles(response.data);
+  return {
+    provider: 'Delta Exchange India',
+    symbol: product.symbol,
+    metric: metric.toLowerCase(),
+    resolution,
+    count: candles.length,
+    candles,
+    lastUpdated: new Date().toISOString(),
+  };
+};
+
+const getFundingHistory = (params) => getMetricHistory({ ...params, metric: 'FUNDING' });
+const getOpenInterestHistory = (params) => getMetricHistory({ ...params, metric: 'OI' });
+const getMarkPriceHistory = (params) => getMetricHistory({ ...params, metric: 'MARK' });
+
 const getOrderBook = async (symbol, depth = 20) => {
   const product = await resolveProduct(symbol);
   const parsedDepth = Number(depth);
@@ -141,4 +179,4 @@ const getOrderBook = async (symbol, depth = 20) => {
   return { symbol: product.symbol, ...unwrapResult(response.data, 'order book') };
 };
 
-module.exports = { VALID_RESOLUTIONS, normalizeCandle, normalizeCandles, getProducts, getTickers, getTicker, getCandles, getOrderBook };
+module.exports = { VALID_RESOLUTIONS, normalizeCandle, normalizeCandles, getProducts, getTickers, getTicker, getCandles, getFundingHistory, getOpenInterestHistory, getMarkPriceHistory, getOrderBook };
