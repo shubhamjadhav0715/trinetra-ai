@@ -10,6 +10,8 @@ const {
   getMarkPriceHistory,
 } = require('../services/deltaExchangeService');
 
+const { generateFuturesSignal } = require('../strategy/futuresStrategyEngine');
+
 const router = express.Router();
 
 const asyncHandler = (handler) => (req, res) =>
@@ -47,6 +49,25 @@ router.get('/:symbol/candles', asyncHandler(async (req, res) => {
     end: req.query.end,
   });
   res.json(result);
+}));
+
+router.get('/:symbol/signal', asyncHandler(async (req, res) => {
+  const resolution = req.query.resolution || '5m';
+  const market = await getCandles({ symbol: req.params.symbol, resolution });
+  const riskRewardRatio = req.query.risk_reward
+    ? Number(req.query.risk_reward)
+    : 2;
+  const signal = generateFuturesSignal({
+    symbol: req.params.symbol.toUpperCase(),
+    candles: market.candles,
+    resolution,
+    riskRewardRatio,
+  });
+  res.json({
+    provider: 'Delta Exchange India',
+    ...signal,
+    note: 'Research signal only. Paper mode; no live orders are placed.',
+  });
 }));
 
 const metricParams = (req) => ({
