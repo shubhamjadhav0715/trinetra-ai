@@ -1,6 +1,8 @@
 const futuresConfig = Object.freeze({
   marketType: 'perpetual_futures',
   tradingMode: 'paper',
+  initialCapital: 10000,
+  currency: 'INR',
   allowLiveOrders: false,
   defaultSymbols: ['BTCUSD', 'ETHUSD'],
   defaultTimeframe: '5m',
