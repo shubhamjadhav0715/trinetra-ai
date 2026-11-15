@@ -1,200 +1,57 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import '../App.css'
+import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import {
-  Activity, ArrowDownRight, ArrowUpRight, BarChart3, Bitcoin, CircleDot,
-  Clock3, Cpu, Gauge, Layers3, RefreshCw, ShieldCheck, Wallet,
-} from 'lucide-react'
+import { Activity, ArrowUpRight, Bitcoin, BrainCircuit, CandlestickChart, CheckCircle2, Eye, Gauge, Layers3, Minus, Plus, RefreshCw, ShieldCheck, Sparkles, Wallet, Zap } from 'lucide-react'
 import api from '../services/api'
+import '../App.css'
 
-const money = (value, digits = 2) => Number.isFinite(Number(value))
-  ? Number(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })
-  : '--'
+const fmt = (v, d=2) => Number.isFinite(Number(v)) ? Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}) : '--'
+const Dot = ({live}) => <i className={'neon-dot '+(live?'live':'')} />
 
-function MetricCard({ label, value, hint, icon: Icon, tone = 'cyan', detail }) {
-  return (
-    <article className="metric-card">
-      <div className="metric-top">
-        <span className="metric-label">{label}</span>
-        <span className={`metric-icon ${tone}`}><Icon size={17} /></span>
-      </div>
-      <div className="metric-value">{value}</div>
-      <div className="metric-bottom"><span>{hint}</span>{detail && <strong>{detail}</strong>}</div>
-    </article>
-  )
+function CandleChart({rows,price}) {
+  const data=rows.slice(-40)
+  if(data.length<3) return <div className="chart-wait"><CandlestickChart/><span>Waiting for Delta candle history…</span></div>
+  const max=Math.max(...data.map(x=>Number(x.high))), min=Math.min(...data.map(x=>Number(x.low))), span=max-min||1
+  const y=v=>280-(v-min)/span*250, w=900/data.length
+  return <svg viewBox="0 0 900 310" className="candle-svg" preserveAspectRatio="none">
+    {[30,90,150,210,270].map(n=><line key={n} x1="0" x2="900" y1={n} y2={n} className="gridline"/>)}
+    {data.map((c,i)=>{const o=Number(c.open),cl=Number(c.close),x=i*w+w/2,up=cl>=o,by=Math.min(y(o),y(cl)),bh=Math.max(2,Math.abs(y(o)-y(cl)));return <g key={c.timestamp||i} className={up?'up':'down'}><line x1={x} x2={x} y1={y(Number(c.high))} y2={y(Number(c.low))}/><rect x={x-w*.24} y={by} width={Math.max(4,w*.48)} height={bh} rx="1"/></g>})}
+    <line x1="0" x2="900" y1={y(Number(price)||Number(data.at(-1).close))} y2={y(Number(price)||Number(data.at(-1).close))} className="price-line"/>
+  </svg>
 }
 
-function PriceSparkline({ points, tone }) {
-  const values = points.filter((value) => Number.isFinite(value))
-  if (values.length < 2) return <div className="chart-placeholder">Waiting for live mark-price samples…</div>
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-  const coordinates = values.map((value, index) => {
-    const x = (index / (values.length - 1)) * 100
-    const y = 38 - ((value - min) / range) * 32
-    return `${x},${y}`
-  }).join(' ')
-  return (
-    <svg className={`sparkline ${tone}`} viewBox="0 0 100 42" preserveAspectRatio="none" role="img" aria-label="Recent live mark price samples">
-      <polyline points={coordinates} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
+export default function Dashboard(){
+ const [wallet,setWallet]=useState(null),[stream,setStream]=useState(null),[positions,setPositions]=useState([]),[candles,setCandles]=useState([]),[context,setContext]=useState(null)
+ const [error,setError]=useState(''),[loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false),[tab,setTab]=useState('positions')
+ const [side,setSide]=useState('SHORT'),[contracts,setContracts]=useState('1'),[leverage,setLeverage]=useState('1'),[sl,setSl]=useState(''),[tp,setTp]=useState(''),[review,setReview]=useState(false)
+ const refresh=useCallback(async(quiet=false)=>{if(quiet)setRefreshing(true);try{const [w,m,p,c,x]=await Promise.all([api.get('/paper-trading/wallet'),api.get('/paper-trading/monitor/status'),api.get('/paper-trading/positions?status=OPEN&refresh=false'),api.get('/crypto/BTCUSD/candles?resolution=5m'),api.get('/crypto/BTCUSD/context?resolution=5m')]);setWallet(w.data.wallet);setStream(m.data.stream);setPositions(p.data.positions||[]);setCandles(c.data.candles||[]);setContext(x.data);setError('')}catch(e){setError(e.response?.data?.error||e.message)}finally{setLoading(false);setRefreshing(false)}},[])
+ useEffect(()=>{refresh();const t=setInterval(()=>refresh(true),7000);return()=>clearInterval(t)},[refresh])
+ const btc=stream?.prices?.BTCUSD,eth=stream?.prices?.ETHUSD,price=Number(btc?.price||context?.ticker?.markPrice||0),pnl=Number(wallet?.realizedPnL||0)+Number(wallet?.unrealizedPnL||0)
+ const q=Math.max(0,Number(contracts)||0),lev=Math.max(1,Number(leverage)||1),notional=q*.001*price,margin=notional/lev
+ const risk=Math.abs(price-Number(sl||price))*q*.001+notional*.0005+(Number(sl||0)*q*.001*.0005)
+ const valid=side==='SHORT'?Number(sl)>price&&Number(tp)>0&&Number(tp)<price:Number(sl)>0&&Number(sl)<price&&Number(tp)>price
+ const canReview=price>0&&q>0&&Number.isInteger(q)&&lev<=3&&valid&&risk<=5
+ const atrRows=candles.slice(-15);const atr=atrRows.length>1?atrRows.slice(1).reduce((s,c,i)=>s+Math.max(Number(c.high)-Number(c.low),Math.abs(Number(c.high)-Number(atrRows[i].close)),Math.abs(Number(c.low)-Number(atrRows[i].close))),0)/(atrRows.length-1):null
+ const signal=context?.signal
+ return <motion.section className="terminal" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}}>
+  <header className="terminal-head"><div className="brand"><span><Eye/></span><div><b>TRINETRA <em>AI</em></b><small>INTELLIGENT FUTURES TRADING SYSTEM</small></div></div><nav><a className="active">⌂ Dashboard</a><a>▥ Trade</a><a>◉ AI Intelligence</a><a>✧ Strategy Lab</a><a>▱ Backtesting</a><a>▣ Portfolio</a><a>⬡ Risk</a></nav><b className="paper-mode"><ShieldCheck/> PAPER MODE <Dot live={stream?.connected}/></b></header>
+  <div className="ticker"><span><Dot live={stream?.connected}/> MARKET FEED {stream?.connected?'LIVE':'CONNECTING'}</span><b>₿ BTCUSD <strong>{price?fmt(price):'—'}</strong></b><b>Ξ ETHUSD <strong>{eth?.price?fmt(eth.price):'—'}</strong></b><b>FUNDING <strong>{context?.funding?.analysis?.bias||'—'}</strong></b><b>OI <strong>{context?.openInterest?.analysis?.bias||'—'}</strong></b><span><Dot live={stream?.connected}/> WEBSOCKET</span></div>
+  {error&&<div className="terminal-error">{error} — Check backend localhost:5000</div>}
+  <div className="terminal-grid">
+   <aside className="terminal-left">
+    <section className="neo-panel"><h3><Wallet/> ACCOUNT OVERVIEW</h3><label>Total Equity</label><strong className="equity">{fmt(wallet?.totalEquity)} <small>USDT</small></strong><div className="account-lines"><span>Available</span><b>{fmt(wallet?.availableBalance)}</b><span>In Position</span><b>{fmt(wallet?.lockedMargin)}</b><span>Unrealized P&L</span><b>{fmt(wallet?.unrealizedPnL)}</b><span>Realized P&L</span><b>{fmt(wallet?.realizedPnL)}</b></div></section>
+    <section className="neo-panel"><h3><ShieldCheck/> RISK STATUS</h3><div className="risk-line"><span>Risk per Trade</span><b>0.50%</b></div><div className="risk-track"><i/></div><div className="risk-line"><span>Daily Loss Limit</span><b>2.00%</b></div><div className="risk-track purple"><i/></div><div className="risk-line"><span>Daily P&L</span><b>{fmt(pnl)} USDT</b></div></section>
+    <section className="neo-panel"><h3><Activity/> SYSTEM HEALTH</h3>{[['WebSocket',stream?.connected],['BTC Price Feed',btc?.fresh],['ETH Price Feed',eth?.fresh],['Paper Engine',!!wallet]].map(([n,v])=><div className="health-row" key={n}><Dot live={v}/><span>{n}</span><b>{v?'Connected':'Waiting'}</b></div>)}<small>SL / TP monitor · 1 second</small></section>
+   </aside>
+   <main className="terminal-center">
+    <section className="neo-panel chart-panel"><div className="chart-head"><div><b className="btc">₿</b><strong>BTCUSD</strong><small>Perpetual</small></div><div className="timeframes"><button>1m</button><button className="selected">5m</button><button>15m</button><button>1H</button><button>4H</button></div><button className="refresh" onClick={()=>refresh(true)}><RefreshCw className={refreshing?'spin':''}/></button></div><div className="chart-meta"><span>EMA 9 <b>—</b></span><span>EMA 21 <b>—</b></span><strong>{price?fmt(price):'Waiting for price'}</strong></div><CandleChart rows={candles} price={price}/><div className="chart-foot"><span>DELTA EXCHANGE INDIA · 5 MIN</span><span>{candles.length} candles · public market data</span></div></section>
+    <section className="neo-panel positions"><div className="tabs">{[['positions','Open Positions ('+positions.length+')'],['orders','Orders'],['history','Trade History'],['analytics','P&L Analytics']].map(([id,label])=><button key={id} onClick={()=>setTab(id)} className={tab===id?'selected':''}>{label}</button>)}</div>{tab==='positions'&&positions.length>0?<div className="position-list">{positions.map(p=><div key={p.id}><b>{p.symbol}</b><strong className={p.side==='SHORT'?'loss':'gain'}>{p.side}</strong><span>{fmt(p.entryPrice)}</span><span>{fmt(p.markPrice)}</span><b>{fmt(p.unrealizedPnlUsdt)} USDT</b></div>)}</div>:<div className="empty"><Layers3/><b>{tab==='positions'?'No Open Positions':tab==='orders'?'No pending orders':tab==='history'?'No closed trades yet':'Analytics will appear after trading'}</b><span>Paper account data only. No orders have been placed.</span></div>}</section>
+   </main>
+   <aside className="terminal-right">
+    <section className="neo-panel"><h3><BrainCircuit/> AI MARKET INTELLIGENCE</h3><small className="ai-sub">◉ BTCUSD · 5m ANALYSIS</small><div className="verdict"><Sparkles/><div><b>{signal?.signal||'ANALYZING'}</b><small>{signal?.reason||'Waiting for a confirmed strategy signal'}</small></div></div><div className="intel"><div><span>Trend / EMA</span><b>{signal?.trend||'—'}</b></div><div><span>RSI (14)</span><b>{signal?.indicators?.rsi??'—'}</b></div><div><span>ATR (14, 5m)</span><b>{atr?fmt(atr):'—'}</b></div><div><span>FVG Zones</span><b>{context?.fairValueGaps?.length||'None'}</b></div><div><span>Funding</span><b>{context?.funding?.analysis?.bias||'—'}</b></div><div><span>Order Book</span><b>{context?.orderBook?.bias||'—'}</b></div></div><div className="insight"><b><Sparkles/> AI INSIGHT</b><p>{context?.note||'Market context is research-only. Wait for a confirmed setup.'}</p></div></section>
+    <section className="neo-panel order-panel"><h3><Zap/> PAPER TRADE PANEL</h3><div className="side-switch"><button className={side==='LONG'?'long-active':''} onClick={()=>{setSide('LONG');setReview(false)}}>LONG</button><button className={side==='SHORT'?'short-active':''} onClick={()=>{setSide('SHORT');setReview(false)}}>SHORT</button></div><label>Contracts</label><div className="stepper"><button onClick={()=>setContracts(String(Math.max(1,q-1)))}><Minus/></button><input value={contracts} onChange={e=>{setContracts(e.target.value);setReview(false)}}/><button onClick={()=>setContracts(String(Math.min(100,q+1)))}><Plus/></button></div><label>Leverage</label><select value={leverage} onChange={e=>setLeverage(e.target.value)}><option value="1">1x</option><option value="2">2x</option><option value="3">3x</option></select><label>Entry (Market)</label><div className="read-field">≈ {price?fmt(price):'Waiting for feed'}</div><label>Stop Loss</label><input type="number" value={sl} onChange={e=>{setSl(e.target.value);setReview(false)}} placeholder={side==='SHORT'?'Above entry':'Below entry'}/><label>Take Profit</label><input type="number" value={tp} onChange={e=>{setTp(e.target.value);setReview(false)}} placeholder={side==='SHORT'?'Below entry':'Above entry'}/><div className="estimates"><div><span>Notional</span><b>{fmt(notional)} USD</b></div><div><span>Est. Margin</span><b>{fmt(margin)} USDT</b></div><div><span>Est. Risk incl. fees*</span><b className={risk<=5?'gain':'loss'}>{fmt(risk,4)} USDT</b></div></div><button className="review-btn" disabled={!canReview} onClick={()=>setReview(true)}>REVIEW PAPER ORDER <ArrowUpRight/></button>{review&&<div className="review-ok"><CheckCircle2/> Preview only. No order submitted; backend validation and confirmation are still required.</div>}<small className="hint">*Indicative only. USD/USDT simulated at 1:1. Slippage and gaps may increase losses.</small></section>
+    <section className="neo-panel"><h3><Gauge/> MARKET WATCH</h3><div className="watch"><span>₿ BTCUSD</span><b>{btc?.price?fmt(btc.price):'—'}</b><Dot live={btc?.fresh}/></div><div className="watch"><span>Ξ ETHUSD</span><b>{eth?.price?fmt(eth.price):'—'}</b><Dot live={eth?.fresh}/></div></section>
+   </aside>
+  </div>
+  <footer className="terminal-footer"><span><Eye/> TRINETRA AI · FUTURES INTELLIGENCE</span><span>PAPER SIMULATION ONLY · NO LIVE ORDERS</span><span>{loading?'Connecting…':'Auto refresh · 7s'}</span></footer>
+ </motion.section>
 }
-
-function Dashboard() {
-  const [wallet, setWallet] = useState(null)
-  const [stream, setStream] = useState(null)
-  const [positions, setPositions] = useState([])
-  const [samples, setSamples] = useState({ BTCUSD: [], ETHUSD: [] })
-  const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [error, setError] = useState('')
-
-  const refresh = useCallback(async (quiet = false) => {
-    if (quiet) setRefreshing(true)
-    try {
-      const [walletResponse, monitorResponse, positionsResponse] = await Promise.all([
-        api.get('/paper-trading/wallet'),
-        api.get('/paper-trading/monitor/status'),
-        api.get('/paper-trading/positions?status=OPEN&refresh=false'),
-      ])
-      const nextWallet = walletResponse.data?.wallet
-      const nextStream = monitorResponse.data?.stream
-      setWallet(nextWallet || null)
-      setStream(nextStream || null)
-      setPositions(positionsResponse.data?.positions || [])
-      if (nextStream?.prices) {
-        setSamples((current) => {
-          const next = { ...current }
-          for (const symbol of ['BTCUSD', 'ETHUSD']) {
-            const price = Number(nextStream.prices[symbol]?.price)
-            if (Number.isFinite(price) && nextStream.prices[symbol]?.fresh) {
-              next[symbol] = [...(current[symbol] || []), price].slice(-36)
-            }
-          }
-          return next
-        })
-      }
-      setLastUpdated(new Date())
-      setError('')
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Unable to connect to the paper trading API.')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    refresh()
-    const timer = window.setInterval(() => refresh(true), 5000)
-    return () => window.clearInterval(timer)
-  }, [refresh])
-
-  const streamConnected = Boolean(stream?.connected)
-  const freshCount = ['BTCUSD', 'ETHUSD'].filter((symbol) => stream?.prices?.[symbol]?.fresh).length
-  const netPnl = Number(wallet?.realizedPnL || 0) + Number(wallet?.unrealizedPnL || 0)
-  const pnlTone = netPnl >= 0 ? 'positive' : 'negative'
-  const btc = stream?.prices?.BTCUSD
-  const eth = stream?.prices?.ETHUSD
-  const equity = Number(wallet?.totalEquity ?? wallet?.initialCapital ?? 0)
-  const equityPercent = wallet?.initialCapital ? ((equity - wallet.initialCapital) / wallet.initialCapital) * 100 : 0
-  const monitorLabel = streamConnected ? 'FEED CONNECTED' : 'FEED DISCONNECTED'
-  const positionCount = positions.length
-
-  const statusText = useMemo(() => {
-    if (loading) return 'Connecting to local paper engine'
-    if (error) return 'API connection needs attention'
-    if (!streamConnected) return 'Waiting for Delta market feed'
-    return 'All paper systems operational'
-  }, [loading, error, streamConnected])
-
-  return (
-    <motion.section className="dashboard-shell" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-      <div className="dashboard-heading">
-        <div>
-          <div className="eyebrow"><span className="eyebrow-line" /> TRINETRA INTELLIGENCE / OVERVIEW</div>
-          <h1>Trading <span>Command Center</span></h1>
-          <p className="heading-subtitle">Your market workspace. One view for capital, live prices and risk.</p>
-        </div>
-        <div className="heading-actions">
-          <div className="paper-pill"><span className="pulse-dot" /> PAPER ENVIRONMENT</div>
-          <button className="icon-button" onClick={() => refresh(true)} disabled={refreshing} aria-label="Refresh dashboard" title="Refresh dashboard">
-            <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
-          </button>
-        </div>
-      </div>
-
-      <div className="system-strip">
-        <div className="system-state"><span className={`status-dot ${streamConnected ? 'online' : 'offline'}`} /><strong>{statusText}</strong></div>
-        <div className="system-meta"><span><Clock3 size={13} /> 1s risk checks</span><i /> <span><Activity size={13} /> {freshCount}/2 fresh markets</span><i /> <span>Updated {lastUpdated ? lastUpdated.toLocaleTimeString() : '—'}</span></div>
-      </div>
-
-      {error && <div className="error-banner"><CircleDot size={16} /> {error} <span>Check that the backend is running on port 5000.</span></div>}
-
-      <div className="metrics-grid">
-        <MetricCard label="TOTAL EQUITY" value={`${money(wallet?.totalEquity)} USDT`} hint="Paper account valuation" icon={Wallet} tone="cyan" detail={`${equityPercent >= 0 ? '+' : ''}${money(equityPercent)}%`} />
-        <MetricCard label="AVAILABLE BALANCE" value={`${money(wallet?.availableBalance)} USDT`} hint="Free collateral" icon={Layers3} tone="blue" detail={`${money(wallet?.lockedMargin)} locked`} />
-        <MetricCard label="NET P&L" value={`${netPnl >= 0 ? '+' : ''}${money(netPnl)} USDT`} hint="Realized + unrealized" icon={netPnl >= 0 ? ArrowUpRight : ArrowDownRight} tone={pnlTone} detail={`${money(wallet?.totalFees)} fees`} />
-        <MetricCard label="OPEN POSITIONS" value={String(positionCount).padStart(2, '0')} hint="Across enabled perpetuals" icon={BarChart3} tone="violet" detail="MAX 03" />
-      </div>
-
-      <div className="section-heading">
-        <div><div className="eyebrow">MARKET PULSE</div><h2>Live futures markets</h2></div>
-        <div className="live-label"><span className="pulse-dot" /> DELTA MARK PRICE</div>
-      </div>
-
-      <div className="market-grid">
-        <article className="market-card">
-          <div className="market-card-head">
-            <div className="asset-identity"><span className="asset-logo btc"><Bitcoin size={20} /></span><div><strong>Bitcoin</strong><small>BTCUSD · Perpetual</small></div></div>
-            <span className={`feed-tag ${btc?.fresh ? 'fresh' : 'stale'}`}>{btc?.fresh ? 'LIVE' : 'STALE'}</span>
-          </div>
-          <div className="market-price-row"><strong>{btc?.price ? `$${money(btc.price, 2)}` : '—'}</strong><span>USD</span></div>
-          <div className="market-chart"><PriceSparkline points={samples.BTCUSD} tone="cyan-line" /></div>
-          <div className="market-card-foot"><span>Mark price</span><strong>{btc ? `${money(btc.ageMs / 1000, 1)}s ago` : 'No feed'}</strong></div>
-        </article>
-        <article className="market-card">
-          <div className="market-card-head">
-            <div className="asset-identity"><span className="asset-logo eth">Ξ</span><div><strong>Ethereum</strong><small>ETHUSD · Perpetual</small></div></div>
-            <span className={`feed-tag ${eth?.fresh ? 'fresh' : 'stale'}`}>{eth?.fresh ? 'LIVE' : 'STALE'}</span>
-          </div>
-          <div className="market-price-row"><strong>{eth?.price ? `$${money(eth.price, 2)}` : '—'}</strong><span>USD</span></div>
-          <div className="market-chart"><PriceSparkline points={samples.ETHUSD} tone="violet-line" /></div>
-          <div className="market-card-foot"><span>Mark price</span><strong>{eth ? `${money(eth.ageMs / 1000, 1)}s ago` : 'No feed'}</strong></div>
-        </article>
-      </div>
-
-      <div className="lower-grid">
-        <section className="panel positions-panel">
-          <div className="panel-heading"><div><div className="eyebrow">YOUR EXPOSURE</div><h2>Open positions</h2></div><span className="count-chip">{positionCount} ACTIVE</span></div>
-          {positions.length === 0 ? (
-            <div className="empty-state"><span className="empty-icon"><BarChart3 size={21} /></span><strong>No open positions</strong><p>Your paper positions will appear here when you choose to create one.</p><span className="empty-note">NO ORDERS HAVE BEEN PLACED</span></div>
-          ) : (
-            <div className="table-wrap"><table className="positions-table"><thead><tr><th>CONTRACT</th><th>SIDE</th><th>ENTRY</th><th>MARK</th><th>UNREALIZED P&L</th></tr></thead><tbody>
-              {positions.map((position) => <tr key={position.id}><td><strong>{position.symbol}</strong><small>{position.contracts} contract(s) · {position.leverage}x</small></td><td><span className={`side-tag ${position.side.toLowerCase()}`}>{position.side}</span></td><td>${money(position.entryPrice)}</td><td>${money(position.markPrice)}</td><td className={Number(position.unrealizedPnlUsdt) >= 0 ? 'pnl-positive' : 'pnl-negative'}>{Number(position.unrealizedPnlUsdt) >= 0 ? '+' : ''}{money(position.unrealizedPnlUsdt)} USDT</td></tr>)}
-            </tbody></table></div>
-          )}
-        </section>
-
-        <section className="panel protection-panel">
-          <div className="panel-heading"><div><div className="eyebrow">GUARDRAILS</div><h2>Risk protection</h2></div><ShieldCheck size={20} className="protection-icon" /></div>
-          <div className="risk-status"><span className={`status-dot ${streamConnected ? 'online' : 'offline'}`} /><div><strong>{streamConnected ? 'Monitoring active' : 'Feed unavailable'}</strong><small>Local SL / TP checks · every 1 second</small></div></div>
-          <div className="risk-rules">
-            <div><span>Risk per trade</span><strong>0.50% <small>· 5.00 USDT</small></strong></div>
-            <div><span>Daily loss limit</span><strong>2.00% <small>· 20.00 USDT</small></strong></div>
-            <div><span>Maximum leverage</span><strong>3×</strong></div>
-            <div><span>Maximum positions</span><strong>3</strong></div>
-          </div>
-          <div className="paper-only-note"><Cpu size={15} /><span>Paper simulation only. No live exchange orders are enabled.</span></div>
-        </section>
-      </div>
-
-      <footer className="dashboard-footer"><span><Gauge size={14} /> TRINETRA AI · FUTURES SIMULATION</span><span>USD / USDT simulated at 1:1 · Not an exchange account</span></footer>
-    </motion.section>
-  )
-}
-
-export default Dashboard
