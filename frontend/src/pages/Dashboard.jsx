@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import '../App.css'
 import { motion } from 'framer-motion'
 import {
   Activity, ArrowDownRight, ArrowUpRight, BarChart3, Bitcoin, CircleDot,
