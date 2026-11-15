@@ -14,6 +14,18 @@ const assertPositive = (value, label) => {
   return number;
 };
 
+const assertTickAligned = (value, tickSize, label) => {
+  const price = assertPositive(value, label);
+  const tick = assertPositive(tickSize, 'product tick size');
+  const nearestTick = Math.round(price / tick);
+  const alignedPrice = nearestTick * tick;
+  const tolerance = Math.max(1e-8, tick * 1e-8);
+  if (Math.abs(price - alignedPrice) > tolerance) {
+    throw new Error(`${label} must align with the product tick size of ${tick}.`);
+  }
+  return round(alignedPrice);
+};
+
 const calculatePnlUsd = ({ side, contracts, contractValue, entryPrice, markPrice }) => {
   const direction = side === 'LONG' ? 1 : -1;
   return direction * contracts * contractValue * (markPrice - entryPrice);
@@ -65,8 +77,8 @@ const openPaperPosition = async (input) => {
   }
   const ticker = await getTicker(symbol);
   const entryPrice = assertPositive(ticker.markPrice ?? ticker.price, 'current mark price');
-  const stopLoss = assertPositive(input.stopLoss, 'stopLoss');
-  const takeProfit = assertPositive(input.takeProfit, 'takeProfit');
+  const stopLoss = assertTickAligned(input.stopLoss, product.tickSize, 'stopLoss');
+  const takeProfit = assertTickAligned(input.takeProfit, product.tickSize, 'takeProfit');
   if (side === 'LONG' && (stopLoss >= entryPrice || takeProfit <= entryPrice)) {
     throw new Error('For LONG, stopLoss must be below entry and takeProfit must be above entry.');
   }
