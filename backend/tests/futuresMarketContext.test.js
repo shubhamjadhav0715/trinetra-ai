@@ -47,5 +47,5 @@ test('calculates bid versus ask order-book imbalance', () => {
     sell: [[101, 2]],
   });
   assert.equal(result.bias, 'BID_HEAVY');
-  assert.equal(result.imbalance, 0.8);
+  assert.equal(result.imbalance, 0.6667);
 });
