@@ -74,6 +74,12 @@ const openPaperPosition = async (input) => {
     throw new Error('For SHORT, stopLoss must be above entry and takeProfit must be below entry.');
   }
 
+  const notionalUsd = contracts * product.contractValue * entryPrice;
+  const marginUsdt = notionalUsd / leverage * USD_TO_USDT;
+  const feeRate = Number(product.takerCommissionRate);
+  if (!Number.isFinite(feeRate) || feeRate < 0) throw new Error('Valid taker fee is unavailable from Delta product metadata.');
+  const entryFeeUsdt = notionalUsd * feeRate * USD_TO_USDT;
+
   const riskDistance = Math.abs(entryPrice - stopLoss);
   const grossStopRiskUsdt = contracts * product.contractValue * riskDistance * USD_TO_USDT;
   const estimatedExitFeeAtStop = contracts * product.contractValue * stopLoss * feeRate * USD_TO_USDT;
@@ -83,12 +89,6 @@ const openPaperPosition = async (input) => {
   if (estimatedRoundTripRisk > maxRiskUsdt) {
     throw new Error(`Position risk ${round(estimatedRoundTripRisk)} USDT exceeds the ${round(maxRiskUsdt)} USDT per-trade risk limit. Reduce contracts or move the stop closer.`);
   }
-
-  const notionalUsd = contracts * product.contractValue * entryPrice;
-  const marginUsdt = notionalUsd / leverage * USD_TO_USDT;
-  const feeRate = Number(product.takerCommissionRate);
-  if (!Number.isFinite(feeRate) || feeRate < 0) throw new Error('Valid taker fee is unavailable from Delta product metadata.');
-  const entryFeeUsdt = notionalUsd * feeRate * USD_TO_USDT;
   const requiredUsdt = marginUsdt + entryFeeUsdt;
   const wallet = await PaperWallet.findOne({ accountId: ACCOUNT_ID, currency: 'USDT' });
   if (!wallet) throw new Error('USDT paper wallet not found.');
